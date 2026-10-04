@@ -8,9 +8,10 @@ from nonebot.exception import FinishedException
 from nonebot.matcher import Matcher  # noqa: TC002
 from nonebot.params import Arg, CommandArg
 
+from .api import print_message
 from .config import Config
-from .renderer import ReceiptRenderError, render_receipt
-from .spooler import SpoolerClient, SpoolerError
+from .renderer import ReceiptRenderError
+from .spooler import SpoolerError
 from .template import ReceiptTemplateContext
 
 RECEIPT_TIMEOUT_DEADLINE_KEY = "receipt_timeout_deadline"
@@ -65,15 +66,17 @@ def register_receipt_handlers(receipt_print: type[Matcher]) -> None:
 
 
 async def submit_print_job(event: MessageEvent, message: Message) -> str:
-    """Render the incoming message and submit it to receipts-spooler."""
+    """Render the incoming message and submit it to receipts-spooler.
+
+    投递走 :func:`nonebot_plugin_receipts.api.print_message`，与外部调用方
+    （例如 nonebot-plugin-milock）共用同一份实现。
+    """
     plugin_config = get_runtime_config()
-    rendered = await render_receipt(
+    response = await print_message(
         message,
-        plugin_config,
-        build_template_context(event),
+        config=plugin_config,
+        context=build_template_context(event),
     )
-    client = SpoolerClient(plugin_config)
-    response = await client.push_raw(rendered)
     queue_size = response.get("queue_size")
     if isinstance(queue_size, int):
         return f"打印任务已提交，当前队列长度：{queue_size}"

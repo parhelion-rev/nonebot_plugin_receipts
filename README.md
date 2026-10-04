@@ -145,6 +145,45 @@ RECEIPT_ALLOWED_GROUP_IDS=345678,456789
 在 `raster` 模式下会使用更大的字号和额外留白；在 `hybrid` 模式下会尽量映射为 ESC/POS 的加粗和放大文本。  
 如果需要打印以 `#` 开头的普通文本，可以写成 `\# 普通文本`。
 
+## 给别的插件调用（公开 API）
+
+如果**另一个插件**想借这里的能力打印东西（例如门锁插件把"有人按门铃"
+打成小票），请只依赖下面这个模块，**不要 import `renderer` / `spooler` 等
+内部模块**——那些是实现细节，重构时不会保证兼容。
+
+```python
+from nonebot_plugin_receipts.api import print_text, render_text
+from nonebot_plugin_receipts.template import ReceiptTemplateContext
+
+# 渲染并投递（最常用）
+await print_text(
+    "!! 门铃 !!\n\n23:12 有人按门铃\n小米全自动智能门锁（工作室）",
+    context=ReceiptTemplateContext(
+        sender_name="小米全自动智能门锁",   # 会填进模板的 {sender_name}
+        sender_id="1021313131",
+    ),
+)
+
+# 只要字节、自己投递
+payload: bytes = await render_text("只渲染不发送")
+```
+
+| 函数 | 作用 |
+| --- | --- |
+| `print_text(text, *, config=None, context=None)` | 文本 → ESC/POS → 投给 spooler |
+| `render_text(text, *, config=None, context=None)` | 文本 → ESC/POS 字节（不投递）|
+| `print_message(message, *, config=None, context=None)` | 同上，但接受 OneBot 消息（可含图片）|
+| `render_message(message, *, config=None, context=None)` | 同上，只渲染 |
+| `build_text_message(text)` | 把纯文本包成 OneBot 消息 |
+| `get_runtime_config()` | 读当前 NoneBot 运行时配置 |
+
+要点：
+
+* `config` 省略时从 NoneBot 运行时读，所以调用方**不需要自己配一遍**
+  spooler 地址与令牌，它们只在这里配；
+* `context` 省略时用空上下文，模板里的 `{sender_name}` / `{sender_id}` 会是空；
+* 本插件自己的 `/ticket` 命令走的也是这条路径，所以行为**不会两套实现漂移**。
+
 ## 手动实机测试（不启动 NoneBot）
 
 可直接运行脚本把测试内容渲染为 ESC/POS 并提交到 `receipts-spooler`：
